@@ -8,7 +8,7 @@ import imutils
 import cv2
 import os
 
-def image_to_feature_vector(image, size=(64, 64)):
+def image_to_feature_vector(image, size=(128, 128)):
     # resize the image to a fixed size, then flatten the image into
     # a list of raw pixel intensities
     return cv2.resize(image, size).flatten()
@@ -34,8 +34,11 @@ def extract_color_histogram(image, bins=(8, 8, 8)):
 
 # construct the argument parse and parse the arguments
 ap = argparse.ArgumentParser()
-ap.add_argument("-d", "--dataset", type=str, default='knn_dataset',
+ap.add_argument("-t", "--train", type=str, default='knn_dataset/train',
                 help="path to input dataset")
+ap.add_argument("-v", "--test", type=str, default='knn_dataset/test',
+                help="path to input dataset")
+
 ap.add_argument("-k", "--neighbors", type=int, default=1,
                 help="# of nearest neighbors for classification")
 ap.add_argument("-j", "--jobs", type=int, default=-1,
@@ -44,7 +47,8 @@ args = vars(ap.parse_args())
 
 # grab the list of images that we'll be describing
 print("[INFO] describing images...")
-imagePaths = list(paths.list_images(args["dataset"]))
+imgTrainPath = list(paths.list_images(args["train"]))
+imgTestPath = list(paths.list_images(args["test"]))
 
 # initialize the raw pixel intensities matrix, the features matrix,
 # and labels list
@@ -52,8 +56,8 @@ rawImages = []
 features = []
 labels = []
 
-# loop over the input images
-for (i, imagePath) in enumerate(imagePaths):
+# loop over the input train images
+for (i, imagePath) in enumerate(imgTrainPath):
     # load the image and extract the class label (assuming that our
     # path as the format: /path/to/dataset/{class}.{image_num}.jpeg
     image = cv2.imread(imagePath)
@@ -73,10 +77,9 @@ for (i, imagePath) in enumerate(imagePaths):
 
     # show an update every 1,000 images
     if i > 0 and i % 100 == 0:
-        print("[INFO] processed {}/{}".format(i, len(imagePaths)))
+        print("[INFO] processed train images{}/{}".format(i, len(imgTrainPath)))
 
 
-print labels
 # show some information on the memory consumed by the raw images
 # matrix and features matrix
 rawImages = np.array(rawImages)
@@ -87,12 +90,56 @@ print("[INFO] pixels matrix: {:.2f}MB".format(
 print("[INFO] features matrix: {:.2f}MB".format(
         features.nbytes / (1024 * 1000.0)))
 
+rawImages_test = []
+features_test = []
+labels_test = []
+
+# loop over the input test images
+for (i, imageTest) in enumerate(imgTestPath):
+    # load the image and extract the class label (assuming that our
+    # path as the format: /path/to/dataset/{class}.{image_num}.jpeg
+    image = cv2.imread(imageTest)
+    label = imageTest.split(os.path.sep)[-1].split(".")[0]
+
+    # extract raw pixel intensity "features", followed by a color
+    # histogram to characterize the color distribution of the pixels
+    # in the image
+    pixels = image_to_feature_vector(image)
+    hist = extract_color_histogram(image)
+
+    # update the raw images, features, and labels matricies,
+    # respectively
+    rawImages_test.append(pixels)
+    features_test.append(hist)
+    labels_test.append(label)
+
+    # show an update every 1,000 images
+    if i > 0 and i % 100 == 0:
+        print("[INFO] processed test images{}/{}".format(i, len(imgTestPath)))
+
+# show some information on the memory consumed by the raw images
+# matrix and features matrix
+rawImages_test = np.array(rawImages_test)
+features_test = np.array(features_test)
+labels_test = np.array(labels_test)
+
+
 # partition the data into training and testing splits, using 75%
 # of the data for training and the remaining 25% for testing
-(trainRI, testRI, trainRL, testRL) = train_test_split(
-    rawImages, labels, test_size=0.5, random_state=42)
-(trainFeat, testFeat, trainLabels, testLabels) = train_test_split(
-    features, labels, test_size=0.5, random_state=42)
+#(trainRI, testRI, trainRL, testRL) = train_test_split(
+#    rawImages, labels, test_size=0.5, random_state=42)
+#(trainFeat, testFeat, trainLabels, testLabels) = train_test_split(
+#    features, labels, test_size=0.5, random_state=42)
+
+trainRI = rawImages
+trainFeat = features
+trainRL = labels
+trainLabels = labels
+
+testRI = rawImages_test
+testFeat = features_test
+testRL = labels_test
+testLabels = labels_test
 
 # train and evaluate a k-NN classifer on the raw pixel intensities
 print("[INFO] evaluating raw pixel accuracy...")
