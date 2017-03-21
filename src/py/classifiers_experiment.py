@@ -1,4 +1,29 @@
-
+# Compare 9 classifiers performance by accuracy on cross-validation and
+# by precision on fixed additional validation data
+"""
+directory structure:
+```
+dataset/
+    train/
+        Type_1/
+            001.jpg
+            002.jpg
+            ...
+        Type_2/
+            001.jpg
+            002.jpg
+            ...
+    validation/
+        Type_1/
+            001.jpg
+            002.jpg
+            ...
+        Type_2/
+            001.jpg
+            002.jpg
+            ...
+```
+"""
 # import the necessary packages
 from sklearn.model_selection import train_test_split
 from sklearn.neural_network import MLPClassifier
@@ -18,6 +43,7 @@ import argparse
 import imutils
 import cv2
 import os
+
 
 def extract_color_histogram(image, bins=(8, 8, 8)):
     # extract a 3D color histogram from the HSV color space using
@@ -40,9 +66,9 @@ def extract_color_histogram(image, bins=(8, 8, 8)):
 
 # construct the argument parse and parse the arguments
 ap = argparse.ArgumentParser()
-ap.add_argument("-t", "--train", type=str, default='knn_dataset/train',
+ap.add_argument("-t", "--train", type=str, default='cervix/train',
                 help="path to input dataset")
-ap.add_argument("-v", "--test", type=str, default='knn_dataset/test',
+ap.add_argument("-v", "--test", type=str, default='cervix/validation',
                 help="path to input dataset")
 args = vars(ap.parse_args())
 
@@ -60,10 +86,9 @@ labels_test = []
 
 # loop over the input train images
 for (i, imagePath) in enumerate(imageTrainPaths):
-    # load the image and extract the class label (assuming that our
-    # path as the format: /path/to/dataset/{class}.{image_num}.jpg
+    # load the image and extract the class label
     image = cv2.imread(imagePath)
-    label = imagePath.split(os.path.sep)[-1].split(".")[0]
+    label = imagePath.split(os.path.sep)[-2]
 
     # extract a color histogram from the image, then update the
     # data matrix and labels list
@@ -77,10 +102,9 @@ for (i, imagePath) in enumerate(imageTrainPaths):
 
 # loop over the input train images
 for (i, imagePath) in enumerate(imageTestPaths):
-    # load the image and extract the class label (assuming that our
-    # path as the format: /path/to/dataset/{class}.{image_num}.jpg
+    # load the image and extract the class label
     image = cv2.imread(imagePath)
-    label = imagePath.split(os.path.sep)[-1].split(".")[0]
+    label = imagePath.split(os.path.sep)[-2]
 
     # extract a color histogram from the image, then update the
     # data matrix and labels list
@@ -109,7 +133,8 @@ X_test = np.array(data_test)
 y_test = labels_test
 
 
-names = ["Nearest Neighbors", "Linear SVM", "RBF SVM", "SGDClassifier","Gaussian Process",
+names = ["Nearest Neighbors", "Linear SVM", "RBF SVM", "SGDClassifier",
+         #"Gaussian Process",
          "Decision Tree", "Random Forest", "MLPClassifier", "AdaBoost",
          "Naive Bayes"]
 
@@ -118,14 +143,25 @@ classifiers = [
     LinearSVC(),
     SVC(gamma=2, C=1),
     SGDClassifier(loss="log", n_iter=10),
-    GaussianProcessClassifier(1.0 * RBF(1.0), warm_start=True),
+    #GaussianProcessClassifier(1.0 * RBF(1.0), warm_start=True),
     DecisionTreeClassifier(max_depth=15),
-    RandomForestClassifier(max_depth=25, n_estimators=10, max_features=32),
+    RandomForestClassifier(n_estimators=100, max_features='sqrt'),
     MLPClassifier(alpha=1),
     AdaBoostClassifier(learning_rate=0.1),
     GaussianNB()]
 
-# iterate over classifiers
+# closs_validation accuracy experiments
+from sklearn.model_selection import cross_val_score
+results = {}
+for name, clf in zip(names, classifiers):
+    scores = cross_val_score(clf, X_train, y_train, cv=5)
+    results[name] = scores
+
+for name, scores in results.items():
+    print("%20s | Accuracy: %0.2f%% (+/- %0.2f%%)" % (name, 100 * scores.mean(), 100 * scores.std() * 2))
+
+
+# iterate over classifiers by using fixed additional validation data
 for name, model in zip(names, classifiers):
     print("Training and evaluating classifier {}".format(name))
     model.fit(X_train, y_train)
